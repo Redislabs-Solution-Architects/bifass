@@ -293,6 +293,8 @@ func main() {
 	http.HandleFunc("/events", eventsHandler)
 	go func() { http.ListenAndServe(":8080", nil) }()
 
+	fmt.Println("Point your browser to http://localhost:8080")
+	
 	// execute balance transfer tasks as much as max threads
 	for i := 0; i < cfg.Options.ThreadsMax; i++ {
 		go balanceTransfer(i)
