@@ -1,0 +1,43 @@
+# redis server configuration
+redis:
+  addr: "localhost:6379"
+  #addr: "redis-12000.rad.demo.redislabs.com:12000"
+  password: ""
+  db: 0
+# service configuration
+options:
+  threads_max: 2000
+  transfer_max: 20000
+  fee: 2
+# initial accounts balance
+accounts:
+  - name: Bank Mandira
+#    balance: 1000000000000
+    balance: 1000000
+  - name: Bank Central Jawa
+#    balance: 1000000000000
+    balance: 1000000
+  - name: BRImob
+#    balance: 1000000000000
+    balance: 1000000
+  - name: Bank Republik
+#    balance: 1000000000000
+    balance: 1000000
+  - name: Bank Jagad
+    balance: 100000
+  - name: Ksatria Baja Bank
+    balance: 100000
+  - name: DKJ45
+    balance: 100000
+  - name: Bank Pengusaha
+    balance: 100000
+  - name: Bank Soang
+    balance: 100000
+  - name: RoboCopBank
+    balance: 10000
+  - name: DBES
+    balance: 10000
+  - name: HSBX
+    balance: 10000
+  - name: Bank Sat
+    balance: 1000 

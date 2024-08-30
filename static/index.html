@@ -1,0 +1,362 @@
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.5.1/apexcharts.min.js"></script>
+  <script>
+    var chartTps
+    var chartAccounts
+    var chartTrx
+    var chartNoBal
+    var chartFail
+
+    var accountsInitialized = false
+
+    var tpsMax = 0
+
+    var bold = false
+
+    function invoke(uri) {
+      var xmlHttp = new XMLHttpRequest();
+      xmlHttp.open("GET", "/invoke/" + uri, false);
+      xmlHttp.send(null);
+      return xmlHttp.responseText;
+    }
+
+    function listenEvents() {
+      eventSource = new EventSource('/events');
+      eventSource.onmessage = function (e) {
+
+        var json = JSON.parse(e.data);
+
+        if (json.TransactionsPerSecond > tpsMax) tpsMax = json.TransactionsPerSecond
+        var tpsPercent = (json.TransactionsPerSecond / tpsMax) * 100
+        chartTps.updateSeries([tpsPercent])
+
+        chartTrx.appendData([{ data: [json.TotalTransactions] }])
+        chartNoBal.appendData([{ data: [json.TotalRejectedInsufficientBalance] }])
+        chartFail.appendData([{ data: [json.TotalFailures] }])
+
+        if (!accountsInitialized) {
+          chartAccounts.updateOptions({ xaxis: { categories: json.AccountNames } })
+          accountsInitialized = true
+        }
+        chartAccounts.updateSeries([{ name: "Balance", data: json.AccountCurrentBalance }, { name: "Fee", data: json.AccountCurrentFee }])
+
+        document.getElementById("total_balance").innerHTML = "Total balance and fee " +
+          (bold ? "<b style='color: #008FFB'>" : "<b style='color: #FF4560'>") + json.TotalBalanceByLua.toLocaleString() + "</b> 1K IDR"
+        bold = !bold
+      }
+    }
+  </script>
+  <link rel="stylesheet" type="text/css" href="styles.css" />
+  <title>BiFASS</title>
+</head>
+
+<body onload="listenEvents()">
+  <div class="leftcol">
+    <section class="box header">
+      <img src="bifass-logo.png" style="width: 5vw">
+      <h2>Real-Time Interbank Fund Transfer Service</h2>
+    </section>
+    <section class="box leftcenter">
+      Threads
+      <select id="select_threads" onchange="invoke('thread/' + this.value)">
+        <option>1</option>
+        <option>10</option>
+        <option>100</option>
+        <option>200</option>
+        <option>500</option>
+        <option>1000</option>
+        <option>1500</option>
+        <option>2000</option>
+      </select>
+      sleep
+      <select>
+        <option>10ms</option>
+      </select>
+      <br><br>
+      <button type="button" onclick="invoke('go')">Start</button>
+      <button type="button" onclick="invoke('pause')">Pause</button>
+      <button type="button" onclick="invoke('reset')">Reset</button>
+    </section>
+    <section class="box leftcenter">
+      <div id="total_balance"></div>
+    </section>
+    <section class="box left">
+      <div id="accounts"></div>
+    </section>
+  </div>
+  <div class="rightcol">
+    <section class="panel">
+      <div id="tps"></div>
+      <div class="block" id="trxtotal"></div>
+      <div class="block" id="trxnobal"></div>
+      <div class="block" id="trxfail"></div>
+    </section>
+    </section>
+  </div>
+
+  <script>
+    // ApexCharts Transactions per second graph --------------------------------------------------------------------------
+    var options = {
+      series: [0],
+      chart: {
+        height: 400,
+        type: 'radialBar',
+        offsetY: -10
+      },
+      plotOptions: {
+        radialBar: {
+          startAngle: -135,
+          endAngle: 135,
+          dataLabels: {
+            name: {
+              fontSize: '16px',
+              color: undefined,
+              offsetY: 120
+            },
+            value: {
+              offsetY: 76,
+              fontSize: '22px',
+              color: undefined,
+              formatter: function (num) {
+                return ((num * tpsMax) / 100).toLocaleString();
+              }
+            }
+          }
+        }
+      },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shade: 'dark',
+          shadeIntensity: 0.15,
+          inverseColors: false,
+          opacityFrom: 1,
+          opacityTo: 1,
+          stops: [0, 50, 65, 91]
+        },
+      },
+      stroke: {
+        dashArray: 4
+      },
+      labels: ['Transactions per second'],
+    };
+
+    chartTps = new ApexCharts(document.querySelector("#tps"), options);
+    chartTps.render();
+
+    // ApexCharts individual accounts balance and fee graph ------------------------------------------------------------
+
+    var options = {
+      series: [{
+        name: 'Balance',
+        data: [0]
+      },
+      {
+        name: 'Fee',
+        data: [0]
+      }
+      ],
+      chart: {
+        type: 'bar',
+        toolbar: { show: false },
+        height: 440,
+        stacked: true
+      },
+      colors: ['#008FFB', '#FF4560'],
+      plotOptions: {
+        bar: {
+          borderRadius: 5,
+          borderRadiusApplication: 'end', // 'around', 'end'
+          borderRadiusWhenStacked: 'all', // 'all', 'last'
+          horizontal: true,
+          barHeight: '80%',
+        },
+      },
+      dataLabels: {
+        enabled: false
+      },
+      stroke: {
+        width: 1,
+        colors: ["#fff"]
+      },
+
+      grid: {
+        xaxis: {
+          lines: {
+            show: false
+          }
+        }
+      },
+      yaxis: {
+        stepSize: 1
+      },
+      tooltip: {
+        shared: false,
+        x: {
+          formatter: function (val) {
+            return val
+          }
+        },
+        y: {
+          formatter: function (val) {
+            return val.toLocaleString()
+          }
+        }
+      },
+      title: {
+        text: 'Accounts balance and fee'
+      },
+      xaxis: {
+        categories: ["x"
+        ],
+        title: {
+          text: '1K IDR'
+        },
+        labels: {
+          formatter: function (val) {
+            return val.toLocaleString()
+          }
+        }
+      },
+    };
+
+    chartAccounts = new ApexCharts(document.querySelector("#accounts"), options);
+    chartAccounts.render();
+
+    // ApexCharts total transactions processed graph ----------------------------------------------------------------------
+
+    var options = {
+      series: [{
+        name: "Transactions",
+        data: []
+      }],
+      chart: {
+        toolbar: { show: false },
+        height: 350,
+        type: 'line',
+        zoom: {
+          enabled: false
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      stroke: {
+        width: 2,
+        curve: 'straight'
+      },
+      grid: {
+        row: {
+          colors: ['#f3f3f3', 'transparent'], // takes an array which will be repeated on columns
+          opacity: 0.5
+        },
+      },
+      xaxis: {
+        categories: ["Transactions processed"],
+      },
+      yaxis: {
+        labels: {
+          formatter: function (val) {
+            return val.toLocaleString()
+          }
+        }
+      }
+    };
+
+    chartTrx = new ApexCharts(document.querySelector("#trxtotal"), options);
+    chartTrx.render();
+
+    // ApexCharts total insufficient balance failure graph -------------------------------------------------------------
+
+    var options = {
+      series: [{
+        name: "Insufficient balance",
+        data: []
+      }],
+      chart: {
+        toolbar: { show: false },
+        height: 350,
+        type: 'line',
+        zoom: {
+          enabled: false
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      stroke: {
+        width: 2,
+        curve: 'straight'
+      },
+      grid: {
+        row: {
+          colors: ['#f3f3f3', 'transparent'], // takes an array which will be repeated on columns
+          opacity: 0.5
+        },
+      },
+      xaxis: {
+        categories: ["Insufficient balance"],
+      },
+      yaxis: {
+        labels: {
+          formatter: function (val) {
+            return val.toLocaleString()
+          }
+        }
+      }
+    };
+
+    chartNoBal = new ApexCharts(document.querySelector("#trxnobal"), options);
+    chartNoBal.render();
+
+    // ApexCharts total failed transactions graph ----------------------------------------------------------------------
+
+    var options = {
+      colors: ['#FF4560'],
+      series: [{
+        name: "Transactions failed",
+        data: []
+      }],
+      chart: {
+        toolbar: { show: false },
+        height: 350,
+        type: 'line',
+        zoom: {
+          enabled: false
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      stroke: {
+        width: 2,
+        curve: 'straight'
+      },
+      grid: {
+        row: {
+          colors: ['#f3f3f3', 'transparent'], // takes an array which will be repeated on columns
+          opacity: 0.5
+        },
+      },
+      xaxis: {
+        categories: ["Transactions failed"],
+      },
+      yaxis: {
+        labels: {
+          formatter: function (val) {
+            return val.toLocaleString()
+          }
+        }
+      }
+
+    };
+    chartFail = new ApexCharts(document.querySelector("#trxfail"), options);
+    chartFail.render();
+  </script>
+</body>
+
+</html>
