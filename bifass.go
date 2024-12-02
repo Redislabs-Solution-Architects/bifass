@@ -15,7 +15,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const STATS_PERIOD = 1
+const STATS_SLEEP = 1
+
+var last_stats_time int64
+
 const IDLE_THREAD_SLEEP_MS = 2000
 const RUNNING_THREAD_SLEEP_MS = 10
 
@@ -64,6 +67,7 @@ func loadConfig() {
 		AccountCurrentFee = append(AccountCurrentFee, 0)
 	}
 
+	last_stats_time = 0
 	transaction_counter = make([]int, cfg.Options.ThreadsMax)
 	failure_counter = make([]int, cfg.Options.ThreadsMax)
 	insufficient_balance_counter = make([]int, cfg.Options.ThreadsMax)
@@ -152,7 +156,12 @@ func updateStats(ctx context.Context, rdb *redis.Client) {
 	}
 
 	transactions_per_second = 0
-	transactions_per_second = (total_transactions - last_total_transactions) / STATS_PERIOD
+	if last_stats_time != 0 {
+		current_stats_time := time.Now().UnixNano() / int64(time.Millisecond)
+		stats_period_second := (float64(current_stats_time) - float64(last_stats_time)) / 1000
+		transactions_per_second = int((float64(total_transactions) - float64(last_total_transactions)) / stats_period_second)
+	}
+	last_stats_time = time.Now().UnixNano() / int64(time.Millisecond)
 	last_total_transactions = total_transactions
 
 	// fmt.Println("Total transactions: ", total_transactions, ", TPS: "+strconv.Itoa(transactions_per_second))
@@ -257,7 +266,7 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "data: %s\n\n", p)
 		w.(http.Flusher).Flush()
 
-		time.Sleep(time.Second * STATS_PERIOD) // STATS_PERIOD seconds wait -- this is so golang
+		time.Sleep(time.Second * STATS_SLEEP) // STATS_PERIOD seconds wait -- this is so golang
 	}
 
 	// Simulate closing the connection
@@ -294,7 +303,7 @@ func main() {
 	go func() { http.ListenAndServe(":8080", nil) }()
 
 	fmt.Println("Point your browser to http://localhost:8080")
-	
+
 	// execute balance transfer tasks as much as max threads
 	for i := 0; i < cfg.Options.ThreadsMax; i++ {
 		go balanceTransfer(i)
@@ -303,11 +312,11 @@ func main() {
 	// loop update statistics
 	for {
 		updateStats(ctx, rdb)
-		time.Sleep(time.Second * STATS_PERIOD) // STATS_PERIOD seconds wait
-		if reset_pending {                     // reset accounts
+		time.Sleep(time.Second * STATS_SLEEP) // STATS_PERIOD seconds wait
+		if reset_pending {                    // reset accounts
 			reset_pending = false
 			started = false
-			time.Sleep(time.Second * STATS_PERIOD)
+			time.Sleep(time.Second * STATS_SLEEP)
 			loadAccounts(ctx, rdb)
 		}
 	}
